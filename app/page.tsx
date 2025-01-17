@@ -1,100 +1,228 @@
-import Image from "next/image";
+"use client";
+
+import {
+  BUKOV_FALLBACK,
+  DEPOSIT_AMOUNT_USDT,
+  PAPAYA_ADDRESS,
+  PAPAYA_CONTRACT_ADDRESS,
+  UNICEF_ADDRESS,
+  USDT_ADDRESS_POLYGON,
+} from "@/utils/constants";
+import { useEffect, useState } from "react";
+import { useAppKitAccount } from "@reown/appkit/react";
+import { ApproveUSDT } from "@/components/TransactionButtons/ApproveUSDT";
+import { DepositUSDT } from "@/components/TransactionButtons/DepositUSDT";
+import { Subscribe } from "@/components/TransactionButtons/Subscribe";
+import { Unsubscribe } from "@/components/TransactionButtons/Unsubscribe";
+import { useReadContract } from "wagmi";
+import { ERC20_ABI } from "@/lib/erc20Abi";
+import { Address, formatUnits } from "viem";
+import { PAPAYA_ABI } from "@/lib/papayaAbi";
+import { SubscriptionInfo } from "@/types";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  // UI states
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [bukovAddress, setBukovAddress] = useState(BUKOV_FALLBACK);
+  const [usdtBalance, setUsdtBalance] = useState<string>("0");
+  const [allowance, setAllowance] = useState<bigint | null>(null);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionInfo>();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const account = useAppKitAccount();
+
+  // Get USDT Balance
+  const { data: balanceData } = useReadContract({
+    address: USDT_ADDRESS_POLYGON,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: [account?.address as Address],
+  });
+
+  useEffect(() => {
+    if (balanceData) {
+      setUsdtBalance(Number(formatUnits(balanceData, 6)).toFixed(2));
+    }
+  }, [balanceData]);
+
+  // Get USDT Allowance to Papaya contract
+  const { data: allowanceData } = useReadContract({
+    address: USDT_ADDRESS_POLYGON,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: [account.address as Address, PAPAYA_CONTRACT_ADDRESS],
+  });
+
+  useEffect(() => {
+    if (allowanceData) {
+      setAllowance(BigInt(allowanceData.toString()));
+    }
+  }, [allowanceData]);
+
+  // Fetch subscriptions
+  const { data: subscriptionData } = useReadContract({
+    address: PAPAYA_CONTRACT_ADDRESS,
+    abi: PAPAYA_ABI,
+    functionName: "allSubscriptions",
+    args: [account?.address as Address],
+  });
+
+  useEffect(() => {
+    if (subscriptionData && subscriptionData.length > 0) {
+      setSubscriptions(subscriptionData as SubscriptionInfo);
+    }
+  }, [subscriptionData]);
+
+  const isSubscribedTo = (wallet: `0x${string}`) => {
+    return subscriptions?.[0]?.includes(wallet) ?? false;
+  };
+
+  // -------------------------------------------------------------------------
+  // RENDER
+  // -------------------------------------------------------------------------
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* NAVBAR */}
+      <nav className="bg-slate-800 border-b p-4 flex justify-between items-center">
+        <h1 className="text-lg text-white font-bold">Subscription Hub</h1>
+        <appkit-button />
+      </nav>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-grow max-w-3xl w-full mx-auto p-4 space-y-6">
+        {/* Messages */}
+        {error && (
+          <div className="bg-red-100 text-red-800 p-3 rounded">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+        {message && (
+          <div className="bg-green-100 text-green-800 p-3 rounded">
+            {message}
+          </div>
+        )}
+
+        {/* USDT Balance */}
+        <div className="bg-white p-5 rounded shadow">
+          <h2 className="text-lg font-semibold">Your USDT Balance</h2>
+          <p>{usdtBalance} USDT</p>
         </div>
+
+        {/* Active Subscriptions */}
+        <div className="bg-white p-5 rounded shadow">
+          <h2 className="text-lg font-semibold">Your Active Subscriptions</h2>
+          <ul className="list-disc ml-5">
+            {subscriptions &&
+              subscriptions[0].map((data) => <li key={data}>{data}</li>)}
+          </ul>
+        </div>
+
+        {/* Deposit Section */}
+        <section className="bg-white p-5 rounded shadow">
+          <h2 className="text-xl font-semibold">Deposit to Papaya</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            You must first approve Papaya to pull USDT from your wallet, then
+            deposit. I will deposit <strong>10 USDT</strong>.
+          </p>
+          {allowance != null && allowance >= DEPOSIT_AMOUNT_USDT ? (
+            <DepositUSDT
+              account={account}
+              depositAmount={BigInt(DEPOSIT_AMOUNT_USDT)}
+              setMessage={setMessage}
+              setError={setError}
+            />
+          ) : (
+            <ApproveUSDT
+              account={account}
+              approvalAmount={BigInt(DEPOSIT_AMOUNT_USDT)}
+              setMessage={setMessage}
+              setError={setError}
+            />
+          )}
+        </section>
+
+        {/* Subscription Cards */}
+        <section className="space-y-6">
+          {/* Bukov */}
+          <div className="bg-white p-5 rounded shadow">
+            <h3 className="text-lg font-semibold">Support Anton Bukov</h3>
+            <p className="text-sm text-gray-700">$1 daily contribution</p>
+            <div className="flex space-x-4 mt-2">
+              <Subscribe
+                account={account}
+                toAddress={bukovAddress}
+                setMessage={setMessage}
+                setError={setError}
+              />
+              {isSubscribedTo(bukovAddress) && (
+                <Unsubscribe
+                  account={account}
+                  fromAddress={bukovAddress}
+                  setMessage={setMessage}
+                  setError={setError}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* UNICEF */}
+          <div className="bg-white p-5 rounded shadow">
+            <h3 className="text-lg font-semibold">Support UNICEF Daily</h3>
+            <p className="text-sm text-gray-700">
+              $1 daily for children in need
+            </p>
+            <div className="flex space-x-4 mt-2">
+              <Subscribe
+                account={account}
+                toAddress={UNICEF_ADDRESS}
+                setMessage={setMessage}
+                setError={setError}
+              />
+              {isSubscribedTo(UNICEF_ADDRESS) && (
+                <Unsubscribe
+                  account={account}
+                  fromAddress={UNICEF_ADDRESS}
+                  setMessage={setMessage}
+                  setError={setError}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Papaya */}
+          <div className="bg-white p-5 rounded shadow">
+            <h3 className="text-lg font-semibold">Support Papaya</h3>
+            <p className="text-sm text-gray-700">$1 daily for Papaya</p>
+            <div className="flex space-x-4 mt-2">
+              <Subscribe
+                account={account}
+                toAddress={PAPAYA_ADDRESS}
+                setMessage={setMessage}
+                setError={setError}
+              />
+              {isSubscribedTo(PAPAYA_ADDRESS) && (
+                <Unsubscribe
+                  account={account}
+                  fromAddress={PAPAYA_ADDRESS}
+                  setMessage={setMessage}
+                  setError={setError}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+
+        <p className="text-xs text-gray-600 mt-4">
+          <strong>Important:</strong> You are responsible for managing and
+          canceling your own subscriptions. Please ensure you keep track of your
+          active subscriptions and cancel them when needed.
+        </p>
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      {/* FOOTER */}
+      <footer className="bg-white border-t p-4 text-center text-xs text-gray-500">
+        © {new Date().getFullYear()} Subscription Hub.
       </footer>
     </div>
   );
