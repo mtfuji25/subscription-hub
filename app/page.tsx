@@ -19,6 +19,7 @@ import { ERC20_ABI } from "@/lib/erc20Abi";
 import { Address, formatUnits } from "viem";
 import { PAPAYA_ABI } from "@/lib/papayaAbi";
 import { SubscriptionInfo } from "@/types";
+import React from "react";
 
 export default function Home() {
   // UI states
@@ -86,7 +87,7 @@ export default function Home() {
       {/* NAVBAR */}
       <nav className="bg-slate-800 border-b p-4 flex justify-between items-center">
         <h1 className="text-lg text-white font-bold">Subscription Hub</h1>
-        <appkit-button />
+        {React.createElement("appkit-button")}
       </nav>
 
       {/* MAIN CONTENT */}
